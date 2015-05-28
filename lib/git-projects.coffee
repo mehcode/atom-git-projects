@@ -1,6 +1,7 @@
 $ = require 'jquery'
 fs = require 'fs-plus'
 path = require 'path'
+url = require 'url'
 utils = require './utils'
 
 Project = require './models/project'
@@ -76,9 +77,54 @@ module.exports =
   #
   # project - The {Project} to open.
   openProject: (project) ->
-    atom.open options =
-      pathsToOpen: [project.path]
-      devMode: atom.config.get('git-projects.openInDevMode')
+    # Serialize and set the state of each component
+    atom.state.syntax = atom.syntax.serialize()
+    atom.state.project = atom.project.serialize()
+    atom.state.workspace = atom.workspace.serialize()
+    atom.packages.deactivatePackage "tree-view"
+    atom.state.packageStates = atom.packages.packageStates
+
+    # Save our state.
+    atom.saveSync()
+
+    # Deactivate dependent and visible packages
+    atom.packages.deactivatePackage "tree-view"
+    atom.packages.deactivatePackage "status-bar"
+
+    # Change the initial path in the load settings
+    settings = JSON.parse(decodeURIComponent(location.hash.substr(1)))
+    settings.initialPaths = [project.path]
+
+    # Format a URI that contains all the load settings
+    uri = url.format
+      protocol: 'file'
+      pathname: "#{settings.resourcePath}/static/index.html"
+      slashes: true
+      hash: encodeURIComponent(JSON.stringify(settings))
+
+    # Replace our existing state
+    window.history.replaceState({}, "", uri)
+    delete atom.constructor.loadSettings
+    atom.state = atom.constructor.loadState "editor"
+
+    # "Switch" to the new project.
+    atom.project.destroy()
+    delete atom.project
+    atom.deserializeProject()
+    atom.deserializePackageStates()
+
+    # Re-activate dependent and visible packages
+    atom.packages.activatePackage "tree-view"
+    atom.packages.activatePackage "status-bar"
+
+    # Load all stored buffers of the new project
+    pane = atom.workspace.paneContainer.root
+    for buffer in atom.project.buffers
+      editor = atom.project.buildEditorForBuffer buffer
+      pane.addItem editor
+
+    # Activate the last-active buffer
+    pane.activateItemForUri atom.state.workspace.paneContainer.root.activeItemUri
 
 
   # Creates an instance of the list view

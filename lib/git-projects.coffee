@@ -34,6 +34,11 @@ module.exports =
       type: 'integer'
       default: 5
       minimum: 1
+    openInCurrentWindow:
+      title: "Open in current window"
+      description: "Replace existing window instead of opening a new window when opening a project."
+      type: "boolean"
+      default: true
     openInDevMode:
       title: "Open in development mode"
       type: "boolean"
@@ -77,6 +82,14 @@ module.exports =
   #
   # project - The {Project} to open.
   openProject: (project) ->
+    unless atom.config.get('git-projects.openInCurrentWindow')
+      # Short-circuit and just open another project.
+      atom.open options =
+        pathsToOpen: [project.path]
+        devMode: atom.config.get('git-projects.openInDevMode')
+
+      return
+
     # Serialize and set the state of each component
     atom.state.syntax = atom.syntax.serialize()
     atom.state.project = atom.project.serialize()
